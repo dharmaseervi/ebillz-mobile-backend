@@ -18,10 +18,9 @@ export default function Home() {
             <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
               app/page.tsx
             </code>
-            .
           </li>
           <li>Save and see your changes instantly.</li>
-        </ol>
+        </ol> j
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <a
@@ -35,7 +34,7 @@ export default function Home() {
               src="https://nextjs.org/icons/vercel.svg"
               alt="Vercel logomark"
               width={20}
-              height={20}
+              height={20} 
             />
             Deploy now
           </a>
