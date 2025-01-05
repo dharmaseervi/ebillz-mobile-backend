@@ -7,7 +7,7 @@ export async function POST(request: Request) {
 
   try {
     // Get user session from Clerk
-    const { name, unit, hsnCode, sellingPrice, quantity, description, userId } = await request.json();
+    const { name, unit, hsnCode, sellingPrice, quantity, description, userId, barcode } = await request.json();
     const item = new ProductDocument({
       name,
       unit,
@@ -15,7 +15,8 @@ export async function POST(request: Request) {
       sellingPrice,
       quantity,
       description,
-      userId
+      userId,
+      barcode
     });
 
     await item.save();
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
   }
 }
 
+
 export async function GET(request: Request) {
   await dbConnect();
 
@@ -33,11 +35,20 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const id = searchParams.get('id');
+    const barcode = searchParams.get('barcode'); // Add barcode to the query
 
     let filterData = [];
-    console.log(search, 'search');
+    console.log(search, 'search', barcode, 'barcode');
 
-    if (search) {
+    if (barcode) {
+      // If barcode is provided, search by barcode
+      console.log(barcode);
+      
+      filterData = await ProductDocument.find({ barcode: { $regex: barcode, $options: 'i' } });
+      console.log(filterData);
+      
+    } else if (search) {
+      // If search term is provided, search by name or symbol
       filterData = await ProductDocument.find({
         $or: [
           { name: { $regex: search, $options: 'i' } },
@@ -45,8 +56,10 @@ export async function GET(request: Request) {
         ]
       });
     } else if (id) {
+      // If id is provided, fetch the product by id
       filterData = await ProductDocument.findOne({ _id: id });
     } else {
+      // If no parameters are provided, fetch all products
       filterData = await ProductDocument.find();
     }
 
@@ -57,3 +70,29 @@ export async function GET(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  await dbConnect();
+
+  try {
+    const { id, ...updatedItem } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Item ID is required" }, { status: 400 });
+    }
+
+    const updatedItems = await ProductDocument.findByIdAndUpdate(
+      id,
+      { $set: updatedItem },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedItems) {
+      return NextResponse.json({ success: false, error: "Item not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, updatedItem });
+  } catch (error) {
+    console.error("Error updating item:", error);
+    return NextResponse.json({ success: false, error: "Error updating item" }, { status: 500 });
+  }
+}

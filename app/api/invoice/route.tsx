@@ -1,9 +1,14 @@
 import Invoice from '@/model/invoice';
 import dbConnect from '@/utli/connectdb';
 import { NextResponse } from 'next/server';
+import ProductDocument from "@/model/item";
+import mongoose from 'mongoose';
 
 export async function POST(request: Request) {
     await dbConnect();
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const {
             invoiceDate,
@@ -39,53 +44,124 @@ export async function POST(request: Request) {
             sgst,
             tax,
             total,
-            status: 'unpaid'
+            status: 'unpaid',
         });
 
-        console.log(newInvoice, 'invpce');
-        await newInvoice.save();
+        // Save the invoice within the transaction
+        await newInvoice.save({ session });
+
+        // Update stock for each item
+        for (const item of items) {
+            const { 
+                itemId, quantity } = item;
+
+            const existingItem = await ProductDocument.findById(
+                itemId).session(session);
+            if (!existingItem) {
+                throw new Error(`Item with ID ${
+                    itemId} not found`);
+            }
+
+            if (existingItem.quantity < quantity) {
+                throw new Error(`Insufficient stock for product ID ${
+                    itemId}`);
+            }
+
+            existingItem.quantity -= quantity;
+            await existingItem.save({ session });
+        }
+
+        // Commit the transaction
+        await session.commitTransaction();
+
         return NextResponse.json(newInvoice, { status: 201 });
-    } catch (error) {
-        return NextResponse.json({ error: 'Failed to create invoice' }, { status: 400 });
+    } catch (error: any) {
+        await session.abortTransaction();
+        console.error("Error creating invoice:", error.message);
+        return NextResponse.json({ error: error.message || 'Failed to create invoice' }, { status: 400 });
+    } finally {
+        session.endSession();
     }
 }
-
 
 
 export async function GET(request: Request) {
     await dbConnect();
+
     try {
         const { searchParams } = new URL(request.url);
-        const id = searchParams.get('id');
-        const status = searchParams.get('status'); // Fetch the 'status' parameter from the URL
+        const id = searchParams.get("id");
+        const status = searchParams.get("status");
+        const query = searchParams.get("query");
 
+        console.log("Request Params - ID:", id, "Status:", status, "Query:", query);
+
+        // Fetch by ID if provided
         if (id) {
-            // Fetch a specific invoice by ID and populate customer and items
             const invoice = await Invoice.findById(id)
-                .populate('customerId') // Populate the customerId field
-                .populate('items.itemId');
+                .populate("customerId")
+                .populate("items.itemId");
 
             if (!invoice) {
-                return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+                return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
             }
             return NextResponse.json(invoice, { status: 200 });
         }
 
-        // Build query based on status
+        // Initialize the base filter
         const filter: any = {};
-        if (status) filter.status = status; // Match the 'status' field if provided
+        if (status) {
+            filter.status = status; // Apply status filter
+        }
 
-        // Fetch filtered invoices and populate fields
-        const invoices = await Invoice.find(filter)
-            .populate('customerId')
+        let invoices;
+
+        if (query) {
+            // Detect if query is numeric
+            const isNumericQuery = !isNaN(Number(query));
+            const regexFilter = !isNumericQuery ? new RegExp(query, "i") : null;
+            const numberQuery = isNumericQuery ? Number(query) : null;
+
+            console.log("Query Processing - Is Numeric:", isNumericQuery, "Regex Filter:", regexFilter, "Number Query:", numberQuery);
+
+            if (numberQuery !== null) {
+                // Exact match for invoiceNumber
+                invoices = await Invoice.find({
+                    ...filter,
+                    invoiceNumber: numberQuery,
+                })
+                    .populate("customerId")
+                    .lean();
+            } else if (regexFilter) {
+                // Match customer fullName or email
+                const allInvoices = await Invoice.find(filter)
+                    .populate("customerId")
+                    .lean();
+
+                invoices = allInvoices.filter((invoice) => {
+                    const customer = invoice.customerId;
+                    return (
+                        customer?.fullName?.match(regexFilter) || // Match fullName
+                        customer?.email?.match(regexFilter) // Match email
+                    );
+                });
+            }
+        } else {
+            // Fetch invoices by status only (or all if no status/query provided)
+            invoices = await Invoice.find(filter)
+                .populate("customerId")
+                .lean();
+        }
+
+        console.log("Filtered Invoices:", invoices);
 
         return NextResponse.json(invoices, { status: 200 });
-
     } catch (error) {
-        console.error('Error fetching invoices:', error);
-        return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 400 });
+        console.error("Error fetching invoices:", error);
+        return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 400 });
     }
 }
+
 
 
 export async function PATCH(request: Request) {

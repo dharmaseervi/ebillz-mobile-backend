@@ -12,7 +12,7 @@ export async function GET(request: Request) {
         const recentInvoices = await Invoice.find()
             .sort({ createdAt: -1 }) // Sort by most recent
             .limit(limit) // Limit the number of results
-            .populate('customerId') // Populate customer details
+            ?.populate('customerId') // Populate customer details
             .populate('items.itemId'); // Populate item details
 
         return NextResponse.json(recentInvoices, { status: 200 });

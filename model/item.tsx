@@ -9,6 +9,7 @@ export interface ProductDocument extends Document {
     quantity: number;
     description: string;
     userId: string;
+    barcode: string;
 }
 
 // Define the schema for the Product document
@@ -20,6 +21,7 @@ const ProductSchema: Schema<ProductDocument> = new Schema({
     quantity: { type: Number, required: true },
     description: { type: String, required: true },
     userId: { type: String, required: true },
+    barcode: { type: String, required: true }
 });
 
 // Export the Product model based on ProductDocument

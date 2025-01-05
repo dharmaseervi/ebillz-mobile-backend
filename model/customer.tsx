@@ -14,7 +14,7 @@ export interface ICustomer extends Document {
 }
 
 // Define the Customer schema
-const customerSchema: Schema = new Schema({
+const CustomerSchema: Schema = new Schema({
     fullName: { type: String, required: true },
     email: { type: String, required: true },
     phone: { type: String },
@@ -27,6 +27,6 @@ const customerSchema: Schema = new Schema({
 });
 
 // Create a compound unique index on email and userId
-customerSchema.index({ email: 1, userId: 1 }, { unique: true });
+CustomerSchema.index({ email: 1, userId: 1 }, { unique: true });
 
-export default mongoose.models.Customer || mongoose.model<ICustomer>('Customer', customerSchema);
+export default mongoose.models.Customer || mongoose.model<ICustomer>('Customer', CustomerSchema);
