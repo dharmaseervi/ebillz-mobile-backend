@@ -68,8 +68,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ success: true, customers });
         }
     } catch (error) {
-        console.error('Error fetching customer data:', error);
-        return NextResponse.json({ success: false, error: 'Failed to fetch customer data' });
+        return NextResponse.json({ success: false });
     }
 }
 
@@ -142,3 +141,4 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ success: false, error: "Failed to delete customer" });
     }
 }
+ 

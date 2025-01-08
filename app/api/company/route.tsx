@@ -48,8 +48,8 @@ export async function PUT(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const companyData = await request.json();
-        console.log(id ,'ids');
-        
+        console.log(id, 'ids');
+
 
         const updatedCompany = await company.findOneAndUpdate({ _id: id }, companyData, { new: true });
         if (!updatedCompany) throw new Error('Company not found or not authorized');
@@ -70,7 +70,7 @@ export async function DELETE(request: NextRequest) {
 
         if (!id) throw new Error('Company ID is required');
 
-        const deletedCompany = await company.findOneAndDelete({ _id: id, userId });
+        const deletedCompany = await company.findOneAndDelete({ _id: id });
         if (!deletedCompany) throw new Error('Company not found or not authorized');
 
         return NextResponse.json({ success: true, message: 'Company deleted successfully' });
