@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         return NextResponse.json(savedBankDetails);
     } catch (error) {
         console.error('Error creating bank details:', error);
-        return NextResponse.json({ message: 'Failed to create bank details', error: error.message });
+        return NextResponse.json({ message: 'Failed to create bank details', error: error});
     }
 }
 
