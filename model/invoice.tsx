@@ -24,6 +24,8 @@ const invoiceSchema = new Schema({
   total: { type: Number, required: true },
   status: { type: String, enum: ['paid', 'unpaid'], default: 'unpaid' },
   createdAt: { type: Date, default: Date.now },
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 });
 
 // Create the Invoice model

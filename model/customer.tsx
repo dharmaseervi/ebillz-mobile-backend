@@ -11,6 +11,7 @@ export interface ICustomer extends Document {
     zip?: number;
     createdAt?: Date;
     userId: string;
+    selectedCompanyId: string
 }
 
 // Define the Customer schema
@@ -23,7 +24,8 @@ const CustomerSchema: Schema = new Schema({
     state: { type: String },
     zip: { type: Number },
     createdAt: { type: Date, default: Date.now },
-    userId: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 });
 
 // Create a compound unique index on email and userId

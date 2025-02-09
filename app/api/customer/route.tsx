@@ -1,6 +1,9 @@
 import customer from "@/model/customer";
 import Invoice from "@/model/invoice";
+import User from "@/model/user";
 import dbConnect from "@/utli/connectdb";
+import { ObjectId } from "mongodb";
+import mongoose from "mongoose";
 import { NextResponse } from "next/server";
 
 
@@ -8,10 +11,23 @@ export async function POST(request: Request) {
     await dbConnect();
 
     try {
-        const { fullName, email, phone, address, city, state, zip, userId } = await request.json();
+        const { fullName, email, phone, address, city, state, zip, clerkUserId, selectedCompanyId } = await request.json();
         if (!fullName || !email || !phone || !address || !city || !state || !zip) {
             return NextResponse.json({ success: false, error: 'Missing required fields' });
         }
+
+        if (!clerkUserId) {
+            return NextResponse.json({ success: false, error: "Clerk User ID is required" }, { status: 400 });
+        }
+
+        const user = await User.findOne({ clerkUserId });
+
+        if (!user) {
+            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
+
+        console.log(user._id, 'userr id');
+
 
         // Create a new customer instance
         const newCustomer = new customer({
@@ -22,7 +38,8 @@ export async function POST(request: Request) {
             city,
             state,
             zip,
-            userId
+            userId: user._id,
+            selectedCompanyId
         });
 
         // Save the new customer to the database
@@ -39,36 +56,62 @@ export async function GET(request: Request) {
     await dbConnect();
 
     try {
-        // Extract query parameters from the request
         const url = new URL(request.url);
         const id = url.searchParams.get('id');
         const query = url.searchParams.get('query');
+        const userId = url.searchParams.get('userId');
+        const selectedCompanyId = url.searchParams.get('selectedCompanyId');
+        
+    
+        console.log("Backend received selectedCompanyId:", selectedCompanyId);
 
         if (id) {
-            // Fetch a specific customer by ID
             const customerData = await customer.findById(id);
             if (!customerData) {
-                return NextResponse.json({ success: false, error: 'Customer not found' });
+                return NextResponse.json({ success: false, error: 'Customer not found' }, { status: 404 });
             }
             return NextResponse.json({ success: true, customer: customerData });
-        } else if (query) {
-            // Search customers by query
-            const regex = new RegExp(query, 'i'); // Case-insensitive search
-            const customers = await customer.find({
-                $or: [
-                    { name: regex },
-                    { email: regex },
-                    { phone: regex }, // Assuming phone is a field
-                ],
-            });
-            return NextResponse.json({ success: true, customers });
-        } else {
-            // Fetch all customers
-            const customers = await customer.find({});
-            return NextResponse.json({ success: true, customers });
         }
+
+        let filter: any = {};
+
+        if (userId) {
+            const user = await User.findOne({ clerkUserId: userId }).select("_id");
+            console.log(user, 'User ObjectId from Clerk userId');
+
+            if (!user) {
+                return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+            }
+            filter.userId = user._id;
+        }
+
+        if (selectedCompanyId && mongoose.Types.ObjectId.isValid(selectedCompanyId)) {
+            filter.selectedCompanyId = new mongoose.Types.ObjectId(selectedCompanyId); // Corrected field name
+        } else if (selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Invalid selectedCompanyId" }, { status: 400 });
+        }
+
+
+        if (query) {
+            // Search customers by query (fullName, email, phone)
+            const regex = new RegExp(query, 'i'); // Case-insensitive search
+            filter.$or = [
+                { fullName: regex },
+                { email: regex },
+                { phone: regex },
+            ];
+        }
+
+        console.log(filter, 'Filter used in MongoDB query'); // Log filter
+
+        const customers = await customer.find(filter);
+        console.log(customers, 'Fetched Customers');
+
+        return NextResponse.json({ success: true, customers });
+
     } catch (error) {
-        return NextResponse.json({ success: false });
+        console.error('Error fetching customers:', error);
+        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -141,4 +184,3 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ success: false, error: "Failed to delete customer" });
     }
 }
- 

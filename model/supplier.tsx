@@ -1,8 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 
 const SupplierSchema = new mongoose.Schema({
-    userId: { type: String, required: true },
-    name: { type: String, required: true },
+    name: { type: String, require: true },
     email: {
         type: String,
         required: true,
@@ -22,6 +21,8 @@ const SupplierSchema = new mongoose.Schema({
         required: true,
         unique: true,
     },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 }, { timestamps: true });
 
 // Adding indexes

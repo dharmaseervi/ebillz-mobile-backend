@@ -4,6 +4,7 @@ import dbConnect from '@/utli/connectdb';
 import Payment from '@/model/payment';
 import Invoice from '@/model/invoice';
 import { Types } from 'mongoose';
+import User from '@/model/user';
 
 export async function POST(request: Request) {
     await dbConnect();
@@ -17,9 +18,22 @@ export async function POST(request: Request) {
             transactionId,
             paymentStatus,
             payment,
+            clerkUserId,
+            selectedCompanyId
         } = await request.json();
-        console.log(paymentMethod);
 
+        console.log(clerkUserId, selectedCompanyId, 'selected company id');
+        // Ensure selectedCompanyId is provided
+        if (!selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
+        }
+
+        // Find user by Clerk User ID
+        const user = await User.findOne({ clerkUserId });
+
+        if (!user) {
+            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
         // Create a new payment entry
         const newPayment = new Payment({
             invoiceId,
@@ -30,6 +44,8 @@ export async function POST(request: Request) {
             transactionId,
             paymentStatus,
             payment,
+            selectedCompanyId,
+            userId: user._id
         });
 
         await newPayment.save();
@@ -49,17 +65,34 @@ export async function GET(request: Request) {
         const invoiceId = searchParams.get('invoiceId');
         const customerId = searchParams.get('customerId');
         const paymentStatus = searchParams.get('paymentStatus');
+        const selectedCompanyId = searchParams.get('selectedCompanyId');
+        const clerkUserId = searchParams.get('clerkUserId'); // User ID from Clerk
+        const page = parseInt(searchParams.get('page') || '1', 10);
+        const limit = parseInt(searchParams.get('limit') || '10', 10);
 
-        console.log(invoiceId, 'invoiceId received');
+        // // Ensure selectedCompanyId is provided
+        // if (!selectedCompanyId) {
+        //     return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
+        // }
 
-        const filter: any = {};
+        // // Find user by Clerk User ID
+        // const user = await User.findOne({ clerkUserId });
 
-        // Add filters only if the query parameters are provided
+        // console.log(user ,'user');
+        
+
+        // if (!user) {
+        //     return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        // }
+
+        const filter: any = {
+        }
+
+        // Add filters only if the parameters are provided
         if (invoiceId) {
             if (Types.ObjectId.isValid(invoiceId)) {
                 filter.invoiceId = new Types.ObjectId(invoiceId);
             } else {
-                console.error('Invalid ObjectId for invoiceId:', invoiceId);
                 return NextResponse.json({ error: 'Invalid invoiceId' }, { status: 400 });
             }
         }
@@ -68,11 +101,13 @@ export async function GET(request: Request) {
 
         console.log('Filter:', filter);
 
-        // Fetch payments from the database
-        const payments = await Payment.find(filter).populate('customerId');
-        console.log('Payments:', payments);
+        // Fetch payments with pagination
+        const payments = await Payment.find(filter)
+            .populate('customerId')
+            .skip((page - 1) * limit)
+            .limit(limit);
 
-        return NextResponse.json(payments, { status: 200 });
+        return NextResponse.json({ payments, page, limit }, { status: 200 });
     } catch (error) {
         console.error('Error fetching payments:', error);
         return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 400 });

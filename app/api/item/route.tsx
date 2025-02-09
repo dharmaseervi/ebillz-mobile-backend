@@ -1,13 +1,23 @@
 import dbConnect from "@/utli/connectdb";
 import { NextResponse } from "next/server";
 import ProductDocument from "@/model/item";
+import User from "@/model/user";
 
 export async function POST(request: Request) {
   await dbConnect();
 
   try {
     // Get user session from Clerk
-    const { name, unit, hsnCode, sellingPrice, quantity, description, userId, barcode } = await request.json();
+    const { name, unit, hsnCode, sellingPrice, quantity, description, clerkUserId, barcode, selectedCompanyId } = await request.json();
+    if (!clerkUserId) {
+      return NextResponse.json({ success: false, error: "Clerk User ID is required" }, { status: 400 });
+    }
+
+    const user = await User.findOne({ clerkUserId });
+
+    if (!user) {
+      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+    }
     const item = new ProductDocument({
       name,
       unit,
@@ -15,8 +25,9 @@ export async function POST(request: Request) {
       sellingPrice,
       quantity,
       description,
-      userId,
-      barcode
+      userId: user._id,
+      barcode,
+      selectedCompanyId
     });
 
     await item.save();
@@ -28,6 +39,7 @@ export async function POST(request: Request) {
 }
 
 
+
 export async function GET(request: Request) {
   await dbConnect();
 
@@ -35,32 +47,45 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const id = searchParams.get('id');
-    const barcode = searchParams.get('barcode'); // Add barcode to the query
+    const barcode = searchParams.get('barcode');
+    const clerkUserId = searchParams.get('userId');
+    const selectedCompanyId = searchParams.get('selectedCompanyId');
+
+    // Ensure selectedCompanyId is provided
+    if (!selectedCompanyId) {
+      return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
+    }
+
+    // Find user by Clerk User ID
+    const user = await User.findOne({ clerkUserId });
+
+    if (!user) {
+      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+    }
 
     let filterData = [];
-    console.log(search, 'search', barcode, 'barcode');
 
     if (barcode) {
-      // If barcode is provided, search by barcode
-      console.log(barcode);
-      
-      filterData = await ProductDocument.find({ barcode: { $regex: barcode, $options: 'i' } });
-      console.log(filterData);
-      
-    } else if (search) {
-      // If search term is provided, search by name or symbol
+      // Search by barcode and selectedCompanyId
       filterData = await ProductDocument.find({
+        barcode: { $regex: barcode, $options: 'i' },
+        selectedCompanyId
+      });
+    } else if (search) {
+      // Search by name and selectedCompanyId
+      filterData = await ProductDocument.find({
+        selectedCompanyId,
         $or: [
           { name: { $regex: search, $options: 'i' } },
           { symbol: { $regex: search, $options: 'i' } }
         ]
       });
     } else if (id) {
-      // If id is provided, fetch the product by id
-      filterData = await ProductDocument.findOne({ _id: id });
+      // Fetch product by id and selectedCompanyId
+      filterData = await ProductDocument.findOne({ _id: id, selectedCompanyId });
     } else {
-      // If no parameters are provided, fetch all products
-      filterData = await ProductDocument.find();
+      // Fetch all products for the selected company
+      filterData = await ProductDocument.find({ selectedCompanyId });
     }
 
     return NextResponse.json({ success: true, filterData });
@@ -69,6 +94,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: 'Error fetching products' }, { status: 500 });
   }
 }
+
 
 export async function PATCH(request: Request) {
   await dbConnect();

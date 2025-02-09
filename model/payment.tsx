@@ -18,6 +18,8 @@ interface Payment extends Document {
     transactionId?: string; // Optional transaction ID if available (for tracking)
     paymentStatus: 'pending' | 'completed' | 'failed'; // Status of the payment
     payment?: number; // Optional additional details about the payment
+    userId: mongoose.Schema.Types.ObjectId;
+    selectedCompanyId: mongoose.Schema.Types.ObjectId;
 }
 
 const PaymentSchema = new Schema<Payment>(
@@ -59,6 +61,8 @@ const PaymentSchema = new Schema<Payment>(
             type: Number,
             required: false,
         },
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
     },
     { timestamps: true } // This will automatically create `createdAt` and `updatedAt` fields
 );

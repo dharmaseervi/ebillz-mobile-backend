@@ -3,6 +3,7 @@ import dbConnect from '@/utli/connectdb';
 import { NextResponse } from 'next/server';
 import ProductDocument from "@/model/item";
 import mongoose from 'mongoose';
+import User from '@/model/user';
 
 export async function POST(request: Request) {
     await dbConnect();
@@ -23,7 +24,23 @@ export async function POST(request: Request) {
             sgst,
             tax,
             total,
+            clerkUserId,
+            selectedCompanyId
         } = await request.json();
+
+        if (!clerkUserId) {
+            return NextResponse.json({ success: false, error: "Clerk User ID is required" }, { status: 400 });
+        }
+
+        const user = await User.findOne({ clerkUserId });
+
+        if (!user) {
+            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
+
+        if (!selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
+        }
 
         // Fetch the latest invoice number and increment it
         const lastInvoice = await Invoice.findOne().sort({ invoiceNumber: -1 }).limit(1);
@@ -45,26 +62,28 @@ export async function POST(request: Request) {
             tax,
             total,
             status: 'unpaid',
+            userId: user._id,
+            selectedCompanyId
         });
 
         // Save the invoice within the transaction
         await newInvoice.save({ session });
 
+        console.log(newInvoice, ' invopice');
+
         // Update stock for each item
         for (const item of items) {
-            const { 
+            const {
                 itemId, quantity } = item;
 
             const existingItem = await ProductDocument.findById(
                 itemId).session(session);
             if (!existingItem) {
-                throw new Error(`Item with ID ${
-                    itemId} not found`);
+                throw new Error(`Item with ID ${itemId} not found`);
             }
 
             if (existingItem.quantity < quantity) {
-                throw new Error(`Insufficient stock for product ID ${
-                    itemId}`);
+                throw new Error(`Insufficient stock for product ID ${itemId}`);
             }
 
             existingItem.quantity -= quantity;
@@ -74,7 +93,7 @@ export async function POST(request: Request) {
         // Commit the transaction
         await session.commitTransaction();
 
-        return NextResponse.json(newInvoice, { status: 201 });
+        return NextResponse.json(newInvoice, { status: 200 });
     } catch (error: any) {
         await session.abortTransaction();
         console.error("Error creating invoice:", error.message);
@@ -84,7 +103,6 @@ export async function POST(request: Request) {
     }
 }
 
-
 export async function GET(request: Request) {
     await dbConnect();
 
@@ -93,12 +111,28 @@ export async function GET(request: Request) {
         const id = searchParams.get("id");
         const status = searchParams.get("status");
         const query = searchParams.get("query");
+        const clerkUserId = searchParams.get("userId");
+        const selectedCompanyId = searchParams.get("selectedCompanyId");
 
-        console.log("Request Params - ID:", id, "Status:", status, "Query:", query);
+        console.log(clerkUserId, "Request Params - ID:", id, "Status:", status, "Query:", query, "Company ID:", selectedCompanyId);
+
+        if (!clerkUserId) {
+            return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
+        }
+
+        // Fetch user details
+        const user = await User.findOne({ clerkUserId });
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        if (!selectedCompanyId) {
+            return NextResponse.json({ error: "Selected company ID is required" }, { status: 400 });
+        }
 
         // Fetch by ID if provided
         if (id) {
-            const invoice = await Invoice.findById(id)
+            const invoice = await Invoice.findOne({ _id: id, selectedCompanyId })
                 .populate("customerId")
                 .populate("items.itemId");
 
@@ -109,7 +143,8 @@ export async function GET(request: Request) {
         }
 
         // Initialize the base filter
-        const filter: any = {};
+        const filter: any = { userId: user._id, selectedCompanyId };
+
         if (status) {
             filter.status = status; // Apply status filter
         }
@@ -131,11 +166,13 @@ export async function GET(request: Request) {
                     invoiceNumber: numberQuery,
                 })
                     .populate("customerId")
+                    .populate("items.itemId")
                     .lean();
             } else if (regexFilter) {
                 // Match customer fullName or email
                 const allInvoices = await Invoice.find(filter)
                     .populate("customerId")
+                    .populate("items.itemId")
                     .lean();
 
                 invoices = allInvoices.filter((invoice) => {
@@ -150,6 +187,7 @@ export async function GET(request: Request) {
             // Fetch invoices by status only (or all if no status/query provided)
             invoices = await Invoice.find(filter)
                 .populate("customerId")
+                .populate("items.itemId")
                 .lean();
         }
 
@@ -158,9 +196,10 @@ export async function GET(request: Request) {
         return NextResponse.json(invoices, { status: 200 });
     } catch (error) {
         console.error("Error fetching invoices:", error);
-        return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 400 });
+        return NextResponse.json({ error: "Failed to fetch invoices" }, { status: 500 });
     }
 }
+
 
 
 
@@ -196,6 +235,7 @@ export async function PATCH(request: Request) {
 }
 export async function PUT(request: Request) {
     await dbConnect();
+
     try {
         // Extract invoice data from the request body
         const {
@@ -216,46 +256,123 @@ export async function PUT(request: Request) {
             paymentMethod,
             paymentDetails,
             paidAmount,
+            clerkUserId,
+            selectedCompanyId, // Ensure invoice is updated for the correct company
         } = await request.json();
 
-        // Find the invoice by its ID
-        const invoice = await Invoice.findById(_id);
-        if (!invoice) {
-            return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+        console.log("Update Request - Invoice ID:", _id, "Company ID:", selectedCompanyId);
+
+        if (!clerkUserId) {
+            return NextResponse.json({ success: false, error: "Clerk User ID is required" }, { status: 400 });
         }
 
-        // Update the entire invoice with the new data
-        invoice.invoiceDate = invoiceDate;
-        invoice.dueDate = dueDate;
-        invoice.orderNumber = orderNumber;
-        invoice.salesperson = salesperson;
-        invoice.customerId = customerId;
-        invoice.items = items;
-        invoice.subtotal = subtotal;
-        invoice.discount = discount;
-        invoice.cgst = cgst;
-        invoice.sgst = sgst;
-        invoice.tax = tax;
-        invoice.total = total;
-        invoice.status = status || invoice.status; // If no new status, keep existing one
-        invoice.paymentMethod = paymentMethod || invoice.paymentMethod; // If no payment method, keep existing one
-        invoice.paymentDetails = paymentDetails || invoice.paymentDetails; // If no payment details, keep existing one
-        invoice.paidAmount = paidAmount || invoice.paidAmount; // If no paid amount, keep existing one
+        if (!selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Company ID is required" }, { status: 400 });
+        }
 
-        // Optionally, update the remaining balance if payment info is included
-        if (paidAmount) {
-            const remainingBalance = invoice.total - paidAmount;
-            invoice.remainingBalance = remainingBalance >= 0 ? remainingBalance : 0;
+        // Find the user
+        const user = await User.findOne({ clerkUserId });
+        if (!user) {
+            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
+
+        // Find the invoice and ensure it belongs to the user and company
+        const invoice = await Invoice.findOne({ _id, userId: user._id, selectedCompanyId });
+
+        if (!invoice) {
+            return NextResponse.json({ error: "Invoice not found or unauthorized access" }, { status: 404 });
+        }
+
+        // Update invoice fields only if provided in the request
+        invoice.invoiceDate = invoiceDate ?? invoice.invoiceDate;
+        invoice.dueDate = dueDate ?? invoice.dueDate;
+        invoice.orderNumber = orderNumber ?? invoice.orderNumber;
+        invoice.salesperson = salesperson ?? invoice.salesperson;
+        invoice.customerId = customerId ?? invoice.customerId;
+        invoice.items = items ?? invoice.items;
+        invoice.subtotal = subtotal ?? invoice.subtotal;
+        invoice.discount = discount ?? invoice.discount;
+        invoice.cgst = cgst ?? invoice.cgst;
+        invoice.sgst = sgst ?? invoice.sgst;
+        invoice.tax = tax ?? invoice.tax;
+        invoice.total = total ?? invoice.total;
+        invoice.status = status ?? invoice.status;
+        invoice.paymentMethod = paymentMethod ?? invoice.paymentMethod;
+        invoice.paymentDetails = paymentDetails ?? invoice.paymentDetails;
+        invoice.paidAmount = paidAmount ?? invoice.paidAmount;
+
+        // Ensure paidAmount and remainingBalance are properly calculated
+        if (typeof paidAmount === "number") {
+            invoice.remainingBalance = Math.max(invoice.total - paidAmount, 0);
         }
 
         // Save the updated invoice
         await invoice.save();
-        console.log(invoice, 'invoice');
+
+        console.log("Updated Invoice:", invoice);
 
         // Return the updated invoice
         return NextResponse.json(invoice, { status: 200 });
     } catch (error) {
-        console.error('Error updating invoice:', error);
-        return NextResponse.json({ error: 'Failed to update invoice' }, { status: 400 });
+        console.error("Error updating invoice:", error);
+        return NextResponse.json({ error: "Failed to update invoice" }, { status: 500 });
+    }
+}
+
+export async function DELETE(request: Request) {
+    await dbConnect();
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get("id");
+
+        if (!id) {
+            return NextResponse.json({ error: 'Invoice ID is required' }, { status: 400 });
+        }
+
+        // Find the invoice by ID
+        const invoice = await Invoice.findById(id).session(session);
+
+        if (!invoice) {
+            return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
+        }
+
+        // Rollback stock for each item in the invoice
+        for (const item of invoice.items) {
+            const { itemId, quantity } = item;
+
+            // Validate ObjectId
+            if (!mongoose.isValidObjectId(itemId)) {
+                console.warn(`Invalid ObjectId for itemId: ${itemId}`);
+                continue;
+            }
+
+            const existingItem = await ProductDocument.findById(itemId).session(session);
+
+            if (!existingItem) {
+                // Log the missing item and continue the rollback for others
+                console.warn(`Item with ID ${itemId} not found during stock rollback.`);
+                continue;
+            }
+
+            existingItem.quantity += quantity;
+            await existingItem.save({ session });
+        }
+
+        // Delete the invoice
+        await Invoice.findByIdAndDelete(id, { session });
+
+        // Commit the transaction
+        await session.commitTransaction();
+
+        return NextResponse.json({ message: 'Invoice deleted successfully' }, { status: 200 });
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Error deleting invoice:', error.message);
+        return NextResponse.json({ error: error.message || 'Failed to delete invoice' }, { status: 400 });
+    } finally {
+        session.endSession();
     }
 }

@@ -3,6 +3,7 @@ import Purchase from "@/model/purchase";
 import dbConnect from "@/utli/connectdb";
 import { NextResponse } from "next/server";
 import ProductDocument from "@/model/item";
+import User from "@/model/user";
 
 export async function POST(request: Request) {
     try {
@@ -20,9 +21,24 @@ export async function POST(request: Request) {
             items,
             invoiceStatus,
             totalAmount,
-            userId,
+            clerkUserId,
+            selectedCompanyId
         } = await request.json();
 
+        if (!clerkUserId) {
+            return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
+        }
+
+    
+        // Fetch user details
+        const user = await User.findOne({ clerkUserId });
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        if (!selectedCompanyId) {
+            return NextResponse.json({ error: "Selected company ID is required" }, { status: 400 });
+        }
         // Create a new purchase document
         const purchaseInvoice = new Purchase({
             invoiceNumber,
@@ -34,9 +50,12 @@ export async function POST(request: Request) {
             items,
             invoiceStatus,
             totalAmount,
-            userId,
+            userId: user._id,
+            selectedCompanyId
         });
 
+        console.log(purchaseInvoice);
+        
         // Save the purchase document to the database
         await purchaseInvoice.save();
 
@@ -85,30 +104,37 @@ export async function GET(request: Request) {
         // Parse query parameters
         const { searchParams } = new URL(request.url);
         const id = searchParams.get("id");
-        const userId = searchParams.get("userId");
         const supplierId = searchParams.get("supplierId");
         const allBills = searchParams.get("allbills");
         const unpaidBills = searchParams.get("unpaidbills");
         const paidBills = searchParams.get("paidbills");
+        const clerkUserId = searchParams.get("userId");
+        const selectedCompanyId = searchParams.get("selectedCompanyId");
+
+
+        if (!clerkUserId) {
+            return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
+        }
+
+        // Fetch user details
+        const user = await User.findOne({ clerkUserId });
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        if (!selectedCompanyId) {
+            return NextResponse.json({ error: "Selected company ID is required" }, { status: 400 });
+        }
 
         // Build query object
-        let query = {};
-             
-        if (unpaidBills) {
-            query = { invoiceStatus: "not paid" };
-        } else if (paidBills) {
-            query = { invoiceStatus: "paid" };
-        } else if (userId) {
-            query = { userId };
-        } else if (supplierId) {
-            query = { supplierId };
-        }else if (id) {
-            query = { _id: id };
-        }
-        
+        const query: any = { selectedCompanyId, userId: user._id }
+        if (unpaidBills) query.invoiceStatus = "not paid";
+        if (paidBills) query.invoiceStatus = "paid";
+        if (supplierId) query.supplierId = supplierId;
+        if (id) query._id = id;
         // Fetch purchase invoices based on query
-        const purchaseInvoices = await Purchase.find(query).populate("items.productId");
-        
+        const purchaseInvoices = await Purchase.find(query).populate("items.productId")
+
         return NextResponse.json({ data: purchaseInvoices }, { status: 200 });
 
     } catch (error: any) {
@@ -167,30 +193,30 @@ export async function PUT(request: Request) {
                 console.error(`Product with ID ${newItem.productId} not found`);
                 continue; // Skip this iteration if the product is not found
             }
-        
+
             const previousQuantity = previousItemsMap.get(newItem.productId.toString()) || 0;
             const quantityDifference = newItem.quantity - previousQuantity;
-        
+
             console.log(`Updating Product: ${newItem.productId}`);
             console.log(`Previous Quantity: ${previousQuantity}`);
             console.log(`New Quantity: ${newItem.quantity}`);
             console.log(`Quantity Difference: ${quantityDifference}`);
-        
+
             product.quantity += quantityDifference;
-        
+
             // Initialize or update purchaseQuantity
             product.purchaseQuantity = (product.purchaseQuantity || 0) + quantityDifference;
-        
+
             try {
                 await product.save();
                 console.log(`Product ${product._id} updated successfully`);
             } catch (error) {
                 console.error(`Error saving product ${product._id}:`, error);
             }
-        
+
             previousItemsMap.delete(newItem.productId.toString());
         }
-        
+
 
         // Revert stock for removed items
         for (const [removedProductId, removedQuantity] of previousItemsMap.entries()) {
@@ -238,7 +264,7 @@ export async function DELETE(request: Request) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get("id");
         console.log("ID", id);
-        
+
         // Validate if the ID exists
         if (!id) {
             return NextResponse.json(

@@ -15,7 +15,8 @@ export interface IPurchaseInvoice extends Document {
     }[];
     invoiceStatus: string;
     totalAmount: number;
-    userId: string;
+    userId: mongoose.Schema.Types.ObjectId;
+    selectedCompanyId: mongoose.Schema.Types.ObjectId;
 }
 
 const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
@@ -39,7 +40,8 @@ const purchaseInvoiceSchema = new Schema<IPurchaseInvoice>({
         default: 'not paid'
     },
     totalAmount: { type: Number, required: true },
-    userId: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 }, { timestamps: true });
 
 purchaseInvoiceSchema.index({ invoiceNumber: 1 });

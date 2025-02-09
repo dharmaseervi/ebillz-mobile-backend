@@ -8,7 +8,8 @@ export interface ProductDocument extends Document {
     sellingPrice: number;
     quantity: number;
     description: string;
-    userId: string;
+    userId: mongoose.Schema.Types.ObjectId;
+    selectedCompanyId: mongoose.Schema.Types.ObjectId;
     barcode: string;
 }
 
@@ -20,8 +21,9 @@ const ProductSchema: Schema<ProductDocument> = new Schema({
     sellingPrice: { type: Number, required: true },
     quantity: { type: Number, required: true },
     description: { type: String, required: true },
-    userId: { type: String, required: true },
-    barcode: { type: String, required: true }
+    barcode: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 });
 
 // Export the Product model based on ProductDocument

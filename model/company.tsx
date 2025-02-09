@@ -9,8 +9,8 @@ const CompanySchema = new mongoose.Schema({
   contactNumber: { type: String, required: true },
   email: { type: String, required: true },
   gstNumber: { type: String, required: true },
-  userId: { type: String, required: true },
-  companyBankDetails: [{ type: Schema.Types.ObjectId, ref: 'CompanyBankDetails' }],
+  userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+  logo: { type: String, required: true }
 });
 
 // Compound indexes to ensure email and gstNumber are unique for each user
