@@ -31,4 +31,5 @@ const CustomerSchema: Schema = new Schema({
 // Create a compound unique index on email and userId
 CustomerSchema.index({ email: 1, userId: 1 }, { unique: true });
 
-export default mongoose.models.Customer || mongoose.model<ICustomer>('Customer', CustomerSchema);
+const Customer = mongoose.models.Customer || mongoose.model<ICustomer>("Customer", CustomerSchema);
+export default Customer;

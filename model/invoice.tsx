@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import Customer from './customer';
+
 // Define the InvoiceItem schema
 const invoiceItemSchema = new Schema({
   itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },

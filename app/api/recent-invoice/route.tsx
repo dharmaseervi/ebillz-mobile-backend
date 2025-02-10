@@ -1,6 +1,8 @@
+import Customer from "@/model/customer";
 import Invoice from "@/model/invoice";
 import User from "@/model/user";
 import dbConnect from "@/utli/connectdb";
+import mongoose from "mongoose";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -28,6 +30,8 @@ export async function GET(request: Request) {
             );
         }
 
+        console.log("Registered Models:", mongoose.modelNames());
+
         const limit = parseInt(searchParams.get("limit") || "5", 10);
 
         // Fetch invoices only for this user
@@ -37,17 +41,29 @@ export async function GET(request: Request) {
         })
             .sort({ createdAt: -1 })
             .limit(limit)
-            .populate({
-                path: "customerId",
-                select: "fullName email phone",
-            })
-            .populate({
-                path: "items.itemId",
-                select: "name price",
-            })
             .select("invoiceNumber invoiceDate createdAt total customerId items");
 
-        return NextResponse.json({ success: true, data: recentInvoices }, { status: 200 });
+        // ✅ Fetch customer details separately
+        const customerIds = recentInvoices.map((invoice) => invoice.customerId);
+
+        // Fetch customers in a single query
+        const customers = await Customer.find({ _id: { $in: customerIds } })
+            .select("fullName email phone")
+            .lean();
+
+        // Create a map of customer details
+        const customerMap = customers.reduce((acc, customer) => {
+            acc[customer._id.toString()] = customer;
+            return acc;
+        }, {} as Record<string, any>);
+
+        // Attach customer details to invoices
+        const invoicesWithCustomer = recentInvoices.map((invoice) => ({
+            ...invoice.toObject(),
+            customer: customerMap[invoice.customerId.toString()] || null,
+        }));
+
+        return NextResponse.json({ success: true, data: invoicesWithCustomer }, { status: 200 });
 
     } catch (error) {
         console.error("Error fetching invoices:", error.message);
