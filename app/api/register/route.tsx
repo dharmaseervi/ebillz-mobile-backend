@@ -1,7 +1,7 @@
 // app/api/register/route.ts
 import { NextResponse } from 'next/server';
-import { User } from '@/model/user';
 import dbConnect from '@/utli/connectdb';
+import User from '@/model/user';
 
 
 export async function POST(request: Request) {
