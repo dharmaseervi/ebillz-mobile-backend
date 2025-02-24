@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import ProductDocument from "@/model/item";
 import mongoose from 'mongoose';
 import User from '@/model/user';
+import Customer from '@/model/customer';
 
 export async function POST(request: Request) {
     await dbConnect();
@@ -132,15 +133,18 @@ export async function GET(request: Request) {
 
         // Fetch by ID if provided
         if (id) {
-            const invoice = await Invoice.findOne({ _id: id, selectedCompanyId })
-                .populate("customerId")
-                .populate("items.itemId");
+            const invoice = await Invoice.findOne({ _id: id, selectedCompanyId }).populate("items.itemId");
 
             if (!invoice) {
                 return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
             }
-            return NextResponse.json(invoice, { status: 200 });
+
+            // Fetch the customer separately using invoice.customerId
+            const customer = await Customer.findById(invoice.customerId);
+
+            return NextResponse.json({ ...invoice.toObject(), customer }, { status: 200 });
         }
+
 
         // Initialize the base filter
         const filter: any = { userId: user._id, selectedCompanyId };
