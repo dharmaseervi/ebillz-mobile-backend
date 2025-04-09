@@ -10,7 +10,7 @@ const invoiceItemSchema = new Schema({
 
 // Define the Invoice schema
 const invoiceSchema = new Schema({
-  invoiceNumber: { type: Number, required: true, unique: true },
+  invoiceNumber: { type: Number, required: true },
   invoiceDate: { type: Date, required: true },
   dueDate: { type: Date, required: true },
   orderNumber: { type: String, required: true },
@@ -28,7 +28,7 @@ const invoiceSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 });
-
+invoiceSchema.index({ userId: 1, selectedCompanyId: 1, invoiceNumber: 1 }, { unique: true });
 // Create the Invoice model
 const Invoice = mongoose.models.Invoice || mongoose.model('Invoice', invoiceSchema);
 

@@ -62,8 +62,7 @@ export async function GET(request: Request) {
         const userId = url.searchParams.get('userId');
         const selectedCompanyId = url.searchParams.get('selectedCompanyId');
         
-    
-        console.log("Backend received selectedCompanyId:", selectedCompanyId);
+        console.log(id, 'id');
 
         if (id) {
             const customerData = await customer.findById(id);
@@ -102,10 +101,10 @@ export async function GET(request: Request) {
             ];
         }
 
-        console.log(filter, 'Filter used in MongoDB query'); // Log filter
+       
 
         const customers = await customer.find(filter);
-        console.log(customers, 'Fetched Customers');
+      
 
         return NextResponse.json({ success: true, customers });
 

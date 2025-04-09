@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
         // 🔍 Fetch MongoDB user using Clerk ID
         const user = await User.findOne({ clerkUserId });
-        console.log(user._id);
+ 
 
         if (!user) {
             return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
@@ -81,14 +81,12 @@ export async function PUT(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const companyData = await request.json();
-        console.log(id, 'idssss');
-
+     
 
         const updatedCompany = await company.findOneAndUpdate({ _id: id }, companyData, { new: true });
         if (!updatedCompany) throw new Error('Company not found or not authorized');
 
-        console.log(updatedCompany);
-        
+    
 
         return NextResponse.json({ success: true, company: updatedCompany });
     } catch (error) {

@@ -5,6 +5,7 @@ import ProductDocument from "@/model/item";
 import mongoose from 'mongoose';
 import User from '@/model/user';
 import Customer from '@/model/customer';
+import counter from '@/model/counter';
 
 export async function POST(request: Request) {
     await dbConnect();
@@ -42,14 +43,18 @@ export async function POST(request: Request) {
         if (!selectedCompanyId) {
             return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
         }
+        
 
-        // Fetch the latest invoice number and increment it
-        const lastInvoice = await Invoice.findOne().sort({ invoiceNumber: -1 }).limit(1);
-        const invoiceNumber = lastInvoice ? lastInvoice.invoiceNumber + 1 : 1;
+        
+        const Counter = await counter.findOneAndUpdate(
+            { userId: user._id, selectedCompanyId },
+            { $inc: { sequenceValue: 1 } },
+            { new: true, upsert: true, session }
+        );
 
         // Create the new invoice
         const newInvoice = new Invoice({
-            invoiceNumber,
+            invoiceNumber : Counter.sequenceValue,
             invoiceDate,
             dueDate,
             orderNumber,
@@ -69,8 +74,6 @@ export async function POST(request: Request) {
 
         // Save the invoice within the transaction
         await newInvoice.save({ session });
-
-        console.log(newInvoice, ' invopice');
 
         // Update stock for each item
         for (const item of items) {
@@ -115,8 +118,6 @@ export async function GET(request: Request) {
         const clerkUserId = searchParams.get("userId");
         const selectedCompanyId = searchParams.get("selectedCompanyId");
 
-        console.log(clerkUserId, "Request Params - ID:", id, "Status:", status, "Query:", query, "Company ID:", selectedCompanyId);
-
         if (!clerkUserId) {
             return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
         }
@@ -131,9 +132,14 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Selected company ID is required" }, { status: 400 });
         }
 
+
+
         // Fetch by ID if provided
         if (id) {
             const invoice = await Invoice.findOne({ _id: id, selectedCompanyId }).populate("items.itemId");
+
+            console.log(invoice, "Invoice by ID:", id);
+
 
             if (!invoice) {
                 return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
@@ -141,6 +147,9 @@ export async function GET(request: Request) {
 
             // Fetch the customer separately using invoice.customerId
             const customer = await Customer.findById(invoice.customerId);
+
+            console.log(customer, "Customer by ID:", invoice.customerId);
+
 
             return NextResponse.json({ ...invoice.toObject(), customer }, { status: 200 });
         }
@@ -194,8 +203,6 @@ export async function GET(request: Request) {
                 .populate("items.itemId")
                 .lean();
         }
-
-        console.log("Filtered Invoices:", invoices);
 
         return NextResponse.json(invoices, { status: 200 });
     } catch (error) {

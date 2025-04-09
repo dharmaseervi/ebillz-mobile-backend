@@ -23,6 +23,20 @@ const SupplierSchema = new mongoose.Schema({
     },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },
+    openingBalance: {
+        type: Number,
+        default: 0,
+        min: [0, 'Opening balance cannot be negative']
+    },
+    balanceType: {
+        type: String,
+        enum: ['credit', 'debit'],
+        default: 'credit'
+    },
+    currentBalance: {
+        type: Number,
+        default: 0
+    },
 }, { timestamps: true });
 
 // Adding indexes

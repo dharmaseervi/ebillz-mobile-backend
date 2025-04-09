@@ -1,5 +1,6 @@
 import Supplier from '@/model/supplier'; // Use capitalized convention for models
 import User from '@/model/user';
+import venoderTransaction from '@/model/venoderTransaction';
 import dbConnect from '@/utli/connectdb';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
 
     try {
         // Destructure fields from request body
-        const { name, email, phone, address, city, state, gst, clerkUserId, selectedCompanyId } = await req.json();
+        const { name, email, phone, address, city, state, gst, clerkUserId, selectedCompanyId, openingBalance, balanceType } = await req.json();
 
         if (!clerkUserId) {
             return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
@@ -32,10 +33,24 @@ export async function POST(req: NextRequest) {
             city,
             state,
             gst,
+            openingBalance,
+            balanceType,
+            currentBalance: openingBalance,
             userId: user?._id,
             selectedCompanyId
         });
-        console.log('New Supplier:', newSupplier);
+
+        await venoderTransaction.create({
+            vendor: newSupplier._id,
+            date: new Date(),
+            type: 'opening_balance', // or 'opening_balance'
+            amount: openingBalance,
+            balanceAfter: openingBalance,
+            userId: user?._id,
+            selectedCompanyId,
+            reference: 'Opening Balance'
+        });
+
 
         // Save the document to the database
         const savedSupplier = await newSupplier.save();
@@ -57,6 +72,9 @@ export async function GET(request: NextRequest) {
         const id = searchParams.get("id");
         const clerkUserId = searchParams.get("userId");
         const selectedCompanyId = searchParams.get("selectedCompanyId");
+
+        console.log("Fetching suppliers with params:", { id, clerkUserId, selectedCompanyId });
+
 
         if (!clerkUserId) {
             return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });

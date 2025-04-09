@@ -4,6 +4,8 @@ import dbConnect from "@/utli/connectdb";
 import { NextResponse } from "next/server";
 import ProductDocument from "@/model/item";
 import User from "@/model/user";
+import venoderTransaction from "@/model/venoderTransaction";
+import supplier from "@/model/supplier";
 
 export async function POST(request: Request) {
     try {
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Unauthorized: User ID missing" }, { status: 401 });
         }
 
-    
+
         // Fetch user details
         const user = await User.findOne({ clerkUserId });
         if (!user) {
@@ -54,8 +56,33 @@ export async function POST(request: Request) {
             selectedCompanyId
         });
 
-        console.log(purchaseInvoice);
-        
+        const lastTransaction = await venoderTransaction.findOne({
+            vendor: supplierId,
+            selectedCompanyId
+        }).sort({ createdAt: -1 });
+
+        const previousBalance = lastTransaction?.balanceAfter || 0;
+        const newBalance = previousBalance + totalAmount;
+
+        // Step 3: Create a transaction entry
+        await venoderTransaction.create({
+            vendor: supplierId,
+            date: new Date(),
+            type: 'invoice',
+            amount: totalAmount,
+            balanceAfter: newBalance,
+            userId: user._id,
+            selectedCompanyId,
+            invoiceRef: purchaseInvoice._id
+        });
+
+
+        // Update supplier's currentBalance correctly
+        await supplier.findByIdAndUpdate(supplierId, {
+            $inc: { currentBalance: totalAmount }
+        });
+
+
         // Save the purchase document to the database
         await purchaseInvoice.save();
 
