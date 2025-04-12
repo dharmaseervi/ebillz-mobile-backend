@@ -48,29 +48,37 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const clerkUserId = searchParams.get('userId');
+        const selectedCompanyId = searchParams.get("selectedCompanyId");
+        console.log(selectedCompanyId, 'selected company id');
 
-
-
-        // 🔍 Fetch MongoDB user using Clerk ID
+        // 🔍 Fetch user
         const user = await User.findOne({ clerkUserId });
- 
-
         if (!user) {
             return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
         }
 
-        let Company;
-        if (user._id) {
-            Company = await company.find({ userId: user._id });
-            if (!company) throw new Error('Company not found or not authorized');
-        } else {
-            Company = await company.find({});
+        if (!selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Company ID is required" }, { status: 400 });
         }
 
-        return NextResponse.json({ success: true, Company });
+        let companies;
+
+        if (selectedCompanyId) {
+            // 🔹 Get specific company by ID
+            companies = await company.findOne({ _id: selectedCompanyId, userId: user._id });
+            if (!companies) throw new Error("Company not found or not authorized");
+        } else {
+            // 🔹 Get all companies for the user
+            companies = await company.find({ userId: user._id });
+            if (!companies || companies.length === 0) {
+                throw new Error("No companies found for this user");
+            }
+        }
+
+        return NextResponse.json({ success: true, company: companies });
     } catch (error) {
         console.error('Error fetching company:', error);
-        return NextResponse.json({ success: false, error: error || 'Error fetching company' });
+        return NextResponse.json({ success: false, error: error.message || 'Error fetching company' });
     }
 }
 
@@ -81,12 +89,12 @@ export async function PUT(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
         const companyData = await request.json();
-     
+
 
         const updatedCompany = await company.findOneAndUpdate({ _id: id }, companyData, { new: true });
         if (!updatedCompany) throw new Error('Company not found or not authorized');
 
-    
+
 
         return NextResponse.json({ success: true, company: updatedCompany });
     } catch (error) {
