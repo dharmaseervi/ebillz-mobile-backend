@@ -63,32 +63,28 @@ export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const invoiceId = searchParams.get('invoiceId');
-        const customerId = searchParams.get('customerId');
         const paymentStatus = searchParams.get('paymentStatus');
         const selectedCompanyId = searchParams.get('selectedCompanyId');
-        const clerkUserId = searchParams.get('clerkUserId'); // User ID from Clerk
+        const clerkUserId = searchParams.get('userId');
         const page = parseInt(searchParams.get('page') || '1', 10);
         const limit = parseInt(searchParams.get('limit') || '10', 10);
 
-        // // Ensure selectedCompanyId is provided
-        // if (!selectedCompanyId) {
-        //     return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
-        // }
-
-        // // Find user by Clerk User ID
-        // const user = await User.findOne({ clerkUserId });
-
-        // console.log(user ,'user');
+ 
         
 
-        // if (!user) {
-        //     return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
-        // }
-
-        const filter: any = {
+        if (!selectedCompanyId) {
+            return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
         }
 
-        // Add filters only if the parameters are provided
+        const user = await User.findOne({ clerkUserId });
+        if (!user) {
+            return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+        }
+
+        const filter: any = {
+            selectedCompanyId
+        };
+
         if (invoiceId) {
             if (Types.ObjectId.isValid(invoiceId)) {
                 filter.invoiceId = new Types.ObjectId(invoiceId);
@@ -96,23 +92,35 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: 'Invalid invoiceId' }, { status: 400 });
             }
         }
-        if (customerId) filter.customerId = customerId;
+
+
         if (paymentStatus) filter.paymentStatus = paymentStatus;
 
-        console.log('Filter:', filter);
+        const [payments, total] = await Promise.all([
+            Payment.find(filter)
+                .populate('customerId')
+                .populate({ path: 'invoiceId', select: 'invoiceNumber total date' })
+                .skip((page - 1) * limit)
+                .limit(limit),
+            Payment.countDocuments(filter)
+        ]);
 
-        // Fetch payments with pagination
-        const payments = await Payment.find(filter)
-            .populate('customerId')
-            .skip((page - 1) * limit)
-            .limit(limit);
+        return NextResponse.json({
+            payments,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        }, { status: 200 });
 
-        return NextResponse.json({ payments, page, limit }, { status: 200 });
     } catch (error) {
         console.error('Error fetching payments:', error);
         return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 400 });
     }
 }
+
 
 export async function PUT(request: Request) {
     await dbConnect();

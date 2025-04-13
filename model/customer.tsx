@@ -9,6 +9,8 @@ export interface ICustomer extends Document {
     city?: string;
     state?: string;
     zip?: number;
+    openingBalance?: number;
+    currentBalance?: number;
     createdAt?: Date;
     userId: string;
     selectedCompanyId: string
@@ -23,6 +25,11 @@ const CustomerSchema: Schema = new Schema({
     city: { type: String },
     state: { type: String },
     zip: { type: Number },
+    openingBalance: { type: Number, default: 0 },
+    currentBalance: {
+        type: Number,
+        default: 0
+    },
     createdAt: { type: Date, default: Date.now },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     selectedCompanyId: { type: Schema.Types.ObjectId, ref: "Company", required: true },

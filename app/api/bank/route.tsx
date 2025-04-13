@@ -47,14 +47,15 @@ export async function GET(request: Request) {
 
         // Extract company ID from query parameters
         const { searchParams } = new URL(request.url);
-        const companyId = searchParams.get('companyId');
+        const clerkUserId = searchParams.get('userId');
+        const selectedCompanyId = searchParams.get('selectedCompanyId');
 
-        if (!companyId) {
+        if (!selectedCompanyId) {
             return NextResponse.json({ message: 'Company ID is required' }, { status: 400 });
         }
 
         // Fetch bank details using the company ID
-        const bankDetails = await Bank.findOne({ companyId });
+        const bankDetails = await Bank.findOne({ selectedCompanyId });
 
         if (!bankDetails) {
             return NextResponse.json({ message: 'No bank details found for this company ID' }, { status: 404 });

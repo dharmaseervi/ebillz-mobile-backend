@@ -6,6 +6,8 @@ import mongoose from 'mongoose';
 import User from '@/model/user';
 import Customer from '@/model/customer';
 import counter from '@/model/counter';
+import customerTransaction from '@/model/customerTransaction';
+
 
 export async function POST(request: Request) {
     await dbConnect();
@@ -43,9 +45,7 @@ export async function POST(request: Request) {
         if (!selectedCompanyId) {
             return NextResponse.json({ success: false, error: "Selected company ID is required" }, { status: 400 });
         }
-        
 
-        
         const Counter = await counter.findOneAndUpdate(
             { userId: user._id, selectedCompanyId },
             { $inc: { sequenceValue: 1 } },
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
         // Create the new invoice
         const newInvoice = new Invoice({
-            invoiceNumber : Counter.sequenceValue,
+            invoiceNumber: Counter.sequenceValue,
             invoiceDate,
             dueDate,
             orderNumber,
@@ -93,6 +93,22 @@ export async function POST(request: Request) {
             existingItem.quantity -= quantity;
             await existingItem.save({ session });
         }
+
+        const lastTxn = await customerTransaction.findOne({ customerId, selectedCompanyId }).sort({ createdAt: -1 });
+
+        const previousBalance = lastTxn?.balanceAfter || 0;
+        const newBalance = previousBalance + total;
+
+        await customerTransaction.create({
+            customerId,
+            type: 'invoice',
+            amount: total, // <--- Fix this
+            invoiceRef: newInvoice._id,
+            balanceAfter: newBalance,
+            userId: user._id,
+            selectedCompanyId,
+        });
+
 
         // Commit the transaction
         await session.commitTransaction();
@@ -217,7 +233,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
     await dbConnect();
     try {
-        const { _id, paymentMethod, paymentDetails, paidAmount } = await request.json();
+        const { _id, status } = await request.json();
 
 
         // Find the invoice by its ID
@@ -226,16 +242,7 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
         }
 
-        // Update the payment information and status
-        invoice.paymentMethod = paymentMethod;
-        invoice.paymentDetails = paymentDetails;
-        invoice.paidAmount = paidAmount;
-        invoice.status = 'paid'; // Mark the invoice as paid
-
-        // Optionally, update the remaining balance if needed
-        const remainingBalance = invoice.total - paidAmount;
-        invoice.remainingBalance = remainingBalance >= 0 ? remainingBalance : 0;
-
+        invoice.status = status// Mark the invoice as paid
         await invoice.save();
 
         return NextResponse.json(invoice, { status: 200 });

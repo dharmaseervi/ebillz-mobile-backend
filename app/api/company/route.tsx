@@ -57,9 +57,6 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
         }
 
-        if (!selectedCompanyId) {
-            return NextResponse.json({ success: false, error: "Company ID is required" }, { status: 400 });
-        }
 
         let companies;
 
