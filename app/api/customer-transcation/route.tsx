@@ -158,3 +158,64 @@ export async function GET(request: Request) {
         return handleError(err);
     }
 }
+
+export async function DELETE(request: Request) {
+    try {
+        await dbConnect();
+        const { searchParams } = new URL(request.url);
+        const transactionId = searchParams.get("id");
+        const clerkUserId = searchParams.get("userId");
+        const selectedCompanyId = searchParams.get("companyId");
+
+        if (!transactionId || !clerkUserId || !selectedCompanyId) {
+            throw new Error('Missing required parameters');
+        }
+
+        const user = await User.findOne({ clerkUserId });
+        if (!user) throw new Error('User not found');
+
+        const txnToDelete = await customerTransaction.findOne({ _id: transactionId, selectedCompanyId });
+        if (!txnToDelete) throw new Error('Transaction not found');
+
+        const customerId = txnToDelete.customerId;
+
+        // Delete the transaction
+        await customerTransaction.deleteOne({ _id: transactionId });
+
+        // Fetch all remaining transactions for this customer, sorted by createdAt
+        const remainingTransactions = await customerTransaction.find({
+            customerId,
+            selectedCompanyId
+        }).sort({ createdAt: 1 });
+
+        // Recalculate balances
+        let balance = 0;
+        const updatedTxns = [];
+
+        for (let txn of remainingTransactions) {
+            const change = txn.type === 'payment' ? -txn.amount : txn.amount;
+            balance += change;
+            txn.balanceAfter = balance;
+            await txn.save();
+            updatedTxns.push(txn);
+        }
+
+        // Update customer's current balance
+        await Customer.findByIdAndUpdate(customerId, {
+            currentBalance: balance,
+            balanceType: balance >= 0 ? 'credit' : 'debit'
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: 'Transaction deleted and balances updated',
+            updatedBalance: {
+                value: balance,
+                display: `${Math.abs(balance).toFixed(2)} ${balance >= 0 ? 'Cr' : 'Dr'}`
+            }
+        });
+
+    } catch (err) {
+        return handleError(err);
+    }
+}

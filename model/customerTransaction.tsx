@@ -14,7 +14,7 @@ const CustomerTransactionSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['invoice', 'payment', 'credit_note', 'opening_balance'],
+    enum: ['invoice', 'payment', 'credit_note', 'opening_balance', 'reversal_payment', 'reversal_invoice'],
     required: true
   },
   amount: {
@@ -44,6 +44,11 @@ const CustomerTransactionSchema = new Schema({
       return this.type === 'payment';
     }
   },
+  reversed: {
+    type: Boolean,
+    default: false
+  }
+  ,
   invoiceRef: {
     type: Schema.Types.ObjectId,
     ref: 'Invoice'
@@ -61,7 +66,11 @@ const CustomerTransactionSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "Company",
     required: true
-  }
+  },
+  originalTxnId: {
+    type: Schema.Types.ObjectId,
+    ref: 'CustomerTransaction'
+  },
 }, { timestamps: true });
 
 export default mongoose.models.CustomerTransaction || mongoose.model('CustomerTransaction', CustomerTransactionSchema);
